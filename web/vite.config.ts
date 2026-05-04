@@ -13,4 +13,12 @@ export default defineConfig({
 			src: "/src",
 		},
 	},
+	build: {
+		// Tiptap + yjs + leaflet push the bundle past Vite's default 500 KB
+		// warning; the single-chunk layout is required because tiptap and
+		// y-prosemirror have circular imports across modules that break when
+		// rollup splits them into separate chunks (initialization order
+		// produces "Cannot access 'X' before initialization").
+		chunkSizeWarningLimit: 1500,
+	},
 });
