@@ -11,6 +11,7 @@
     import NavigationPills from "../components/NavigationPills.svelte";
     import InstanceTabs from "../components/InstanceTabs.svelte";
     import ContentArea from "../components/ContentArea.svelte";
+    import {prefetchCommonPages} from "@/utils/prefetch";
     import type {AuthUpdateData} from "@/interfaces/IUser";
 
     const authService = createAuthService();
@@ -27,6 +28,7 @@
         authService.checkAuth();
         settingsService.loadColorConfig();
         setupInstanceCoordination();
+        setupPrefetch();
     });
 
     function setupInstanceCoordination(): void {
@@ -38,6 +40,15 @@
                     activeInstance.currentTab,
                 );
             }
+        });
+    }
+
+    // Warm the fetchNui cache for common pages as soon as the user is
+    // authenticated, so the first click on Citizens/Vehicles/etc. has
+    // data ready and renders instantly.
+    function setupPrefetch(): void {
+        $effect(() => {
+            if (authService.isAuthorized) prefetchCommonPages();
         });
     }
 
@@ -113,48 +124,75 @@
 </main>
 
 <style>
+    /* Outer scrim — kept transparent so the game world stays visible around
+       the tablet shell, matching how NR_Tablet sits over the wallpaper. */
     .mdt-container {
         position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
+        inset: 0;
         display: flex;
         align-items: center;
         justify-content: center;
         z-index: 1000;
+        background: transparent;
     }
 
+    /* Tablet bezel — sized to feel like a real tablet rather than fill the
+       screen. min(80vw, 1500px) keeps it tight on ultrawides; aspect-ish
+       height around 80vh. 1 unit (--u) = 1px @ 1080p.
+
+       The bezel uses a transparent border + dual background-image trick to
+       paint a brushed-aluminium gradient on the border itself: the inner
+       layer (padding-box) is the dark content background; the outer layer
+       (border-box) is the metallic bezel gradient. */
     .mdt-window {
-        width: 95vw;
-        height: 90vh;
-        background: var(--dark-bg);
-        border-radius: 12px;
+        width: min(80vw, 1500px);
+        height: min(82vh, 920px);
+        background: linear-gradient(180deg, rgba(13, 18, 32, 0.96), rgba(7, 10, 20, 0.98));
+        border-radius: calc(var(--u, 0.092592592vh) * 15);
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        box-shadow: 0 20px 40px rgba(23, 23, 23, 0.3);
-        border: 1px solid transparent;
         position: relative;
         transition: opacity 0.2s ease-in-out;
         will-change: opacity;
+        border: calc(var(--u, 0.092592592vh) * 3) solid #3a3d44;
+        box-shadow:
+            0 calc(var(--u, 0.092592592vh) * 30) calc(var(--u, 0.092592592vh) * 60) rgba(0, 0, 0, 0.55),
+            /* hairline highlight along the very top of the bezel — simulates
+               light catching the metal edge */
+            inset 0 1px 0 rgba(255, 255, 255, 0.18),
+            /* outer 1px ring giving the bezel some separation from the scrim */
+            0 0 0 1px rgba(0, 0, 0, 0.4);
     }
 
-    :global([data-job-type="ems"]) .mdt-window {
-        border-color: rgba(220, 50, 50, 0.15);
-        box-shadow: 0 20px 40px rgba(20, 8, 8, 0.4), 0 0 60px rgba(220, 50, 50, 0.04);
+    /* Top-down accent glow only — the dark navy gradient on .mdt-window does
+       all the heavy lifting for the background. No grid overlay. */
+    .mdt-window::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(
+            120% 60% at 50% 0%,
+            rgba(31, 116, 227, 0.10) 0%,
+            rgba(31, 116, 227, 0) 60%
+        );
+        z-index: 0;
     }
 
-    :global([data-job-type="doj"]) .mdt-window {
-        border-color: rgba(180, 150, 60, 0.15);
-        box-shadow: 0 20px 40px rgba(8, 12, 20, 0.4), 0 0 60px rgba(30, 58, 138, 0.04);
-    }
+    /* EMS and DOJ use the same neutral chrome as LEO. Their accent colours
+       still come through on pills, buttons, active nav state, and the dark
+       gradient EMS palette in app.css — but we don't tint the bezel or
+       inner glow, which read as "weird red glow" / "weird gold glow"
+       around the whole window. Keep things neutral. */
 
     .mdt-interface {
         width: 100%;
         height: 100%;
         display: flex;
         flex-direction: column;
+        position: relative;
+        z-index: 1;
     }
 
     .mdt-content {
@@ -162,9 +200,14 @@
         height: calc(100% - 55px); /* Adjust for TopBar height */
     }
 
+    /* Navigation column — translucent glass over the deep navy backdrop,
+       mirroring NR_Tablet's app dock styling. */
     .mdt-navigation {
         max-width: 250px;
-        background: var(--card-dark-bg);
+        background: var(--glass-bg-strong, var(--card-dark-bg));
+        backdrop-filter: blur(calc(var(--u, 0.092592592vh) * 15));
+        -webkit-backdrop-filter: blur(calc(var(--u, 0.092592592vh) * 15));
+        border-right: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08));
         display: flex;
     }
 

@@ -182,16 +182,26 @@
 	}
 
 	.nav-pill:hover {
-		background: var(--btn-secondary-hover);
+		background: rgba(255, 255, 255, 0.05);
 	}
 
 	.nav-pill.active {
-		background: var(--btn-secondary-active);
+		background: linear-gradient(
+			180deg,
+			rgba(31, 116, 227, 0.18) 0%,
+			rgba(31, 116, 227, 0.04) 100%
+		);
 		color: var(--primary-text);
+		border-right: 2px solid rgba(31, 116, 227, 0.55);
+		box-shadow: inset 0 0 0 1px rgba(31, 116, 227, 0.18);
 	}
 
 	.nav-pill.active:hover {
-		background: var(--active-bg);
+		background: linear-gradient(
+			180deg,
+			rgba(31, 116, 227, 0.25) 0%,
+			rgba(31, 116, 227, 0.08) 100%
+		);
 	}
 
 	:global([data-job-type="ems"]) .nav-pill:hover {

@@ -44,7 +44,7 @@
 
 	let { authService, tabService, instanceStateService }: Props = $props();
 
-	let contentZoom = $state("130%");
+	let contentZoom = $state("100%");
 	let sopAgreed = $state(false);
 	let sopChecked = $state(false);
 	let sopIntroduction = $state("");

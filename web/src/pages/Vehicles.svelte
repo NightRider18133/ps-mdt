@@ -61,11 +61,15 @@
 
 	let vehiclePage = $state(1);
 	let vehiclePerPage = $state(25);
+	let totalVehicles = $state(0);
+	let isSearching = $derived(searchQuery.trim().length >= 2);
+	let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	let lastSearchQuery = "";
 
-	let allFilteredVehicles = $derived.by(() => {
+	// Status filter is applied client-side over the rows the server returned for
+	// the current page. Text search is server-side once it's >= 2 chars.
+	let filteredVehicles = $derived.by(() => {
 		let list = vehicleList;
-
-		// Status filter
 		if (statusFilter !== "all") {
 			if (statusFilter === "active") {
 				list = list.filter(v => (v.status === "valid" || !v.status) && v.core_state === 0);
@@ -77,27 +81,22 @@
 				list = list.filter(v => v.status === "stolen" || v.flags?.includes("Stolen"));
 			}
 		}
-
-		// Text search
-		const query = searchQuery.trim().toLowerCase();
-		if (query) {
-			list = list.filter(({ label, plate, owner, class: vehicleClass, type }) =>
-				[label, plate, owner, vehicleClass, type].some(val => val?.toLowerCase().includes(query))
-			);
-		}
-
 		return list;
 	});
 
-	let filteredVehicles = $derived.by(() => {
-		const start = (vehiclePage - 1) * vehiclePerPage;
-		return allFilteredVehicles.slice(start, start + vehiclePerPage);
-	});
-
-	// Reset page on search
 	$effect(() => {
-		searchQuery;
-		vehiclePage = 1;
+		if (isEnvBrowser()) return;
+		const q = searchQuery.trim();
+		if (q === lastSearchQuery) return;
+		lastSearchQuery = q;
+		if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+		if (q.length === 0) {
+			vehiclePage = 1;
+			loadVehiclesPage(1);
+			return;
+		}
+		if (q.length < 2) return;
+		searchDebounceTimer = setTimeout(() => runSearch(q), 250);
 	});
 
 	function getFlagClass(flag: string): string {
@@ -241,31 +240,58 @@
 				{ id: 4, model: 'zentorno', label: 'Pegassi Zentorno', plate: 'SPD 001', owner: 'LSPD Fleet', class: 'Super', type: 'car', flags: [], status: 'valid', points: 0 },
 				{ id: 5, model: 'sanchez', label: 'Sanchez', plate: 'DRT 321', owner: 'James Miller', class: 'Off-Road', type: 'bike', flags: ['Active Warrant'], status: 'impounded', points: 6 },
 			];
+			totalVehicles = vehicleList.length;
 			loading = false;
-		} else {
-			loading = true;
-			try {
-				const response = await fetchNui(NUI_EVENTS.VEHICLE.GET_VEHICLES);
-				vehicleList = Array.isArray(response.vehicles) ? response.vehicles : [];
-			} catch (error) {
-				globalNotifications.error("Failed to load vehicles");
-				vehicleList = [];
-			}
-			loading = false;
+			return;
 		}
+		await loadVehiclesPage(1);
 	});
 
-	async function refreshVehicles() {
+	async function loadVehiclesPage(page: number) {
 		if (isEnvBrowser()) return;
 		loading = true;
 		try {
-			const response = await fetchNui(NUI_EVENTS.VEHICLE.GET_VEHICLES);
-			vehicleList = Array.isArray(response.vehicles) ? response.vehicles : [];
+			const response = await fetchNui<{ vehicles: Vehicle[]; total: number }>(
+				NUI_EVENTS.VEHICLE.GET_VEHICLES,
+				{ page, perPage: vehiclePerPage },
+				{ vehicles: [], total: 0 },
+			);
+			vehicleList = Array.isArray(response?.vehicles) ? response.vehicles : [];
+			totalVehicles = response?.total ?? vehicleList.length;
 		} catch (error) {
 			globalNotifications.error("Failed to load vehicles");
 			vehicleList = [];
+			totalVehicles = 0;
 		}
 		loading = false;
+	}
+
+	async function runSearch(query: string) {
+		if (isEnvBrowser()) return;
+		loading = true;
+		try {
+			const response = await fetchNui<{ vehicles: Vehicle[]; total: number }>(
+				NUI_EVENTS.VEHICLE.SEARCH_VEHICLES,
+				{ query },
+				{ vehicles: [], total: 0 },
+			);
+			vehicleList = Array.isArray(response?.vehicles) ? response.vehicles : [];
+			totalVehicles = response?.total ?? vehicleList.length;
+			vehiclePage = 1;
+		} catch (error) {
+			globalNotifications.error("Failed to search vehicles");
+			vehicleList = [];
+			totalVehicles = 0;
+		}
+		loading = false;
+	}
+
+	async function refreshVehicles() {
+		if (isSearching) {
+			await runSearch(searchQuery.trim());
+		} else {
+			await loadVehiclesPage(vehiclePage);
+		}
 	}
 </script>
 
@@ -474,13 +500,15 @@
 					{/each}
 				{/if}
 			</div>
-			<Pagination
-				currentPage={vehiclePage}
-				totalItems={allFilteredVehicles.length}
-				perPage={vehiclePerPage}
-				onPageChange={(p) => { vehiclePage = p; }}
-				onPerPageChange={(pp) => { vehiclePerPage = pp; vehiclePage = 1; }}
-			/>
+			{#if !isSearching}
+				<Pagination
+					currentPage={vehiclePage}
+					totalItems={totalVehicles}
+					perPage={vehiclePerPage}
+					onPageChange={(p) => { vehiclePage = p; loadVehiclesPage(p); }}
+					onPerPageChange={(pp) => { vehiclePerPage = pp; vehiclePage = 1; loadVehiclesPage(1); }}
+				/>
+			{/if}
 		</div>
 	</div>
 {/if}

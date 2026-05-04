@@ -6,7 +6,7 @@
 	// Appearance
 	let theme = $state("dark");
 	let notificationSounds = $state(true);
-	let uiZoom = $state(130);
+	let uiZoom = $state(100);
 
 	// Map
 	let defaultZoom = $state(5);
@@ -73,7 +73,7 @@
 	}
 
 	function resetZoom() {
-		applyZoom(130);
+		applyZoom(100);
 	}
 </script>
 
@@ -117,7 +117,7 @@
 						oninput={(e) => applyZoom(parseInt(e.currentTarget.value))}
 					/>
 					<span class="zoom-value">{uiZoom}%</span>
-					{#if uiZoom !== 130}
+					{#if uiZoom !== 100}
 						<button class="zoom-reset" onclick={resetZoom} type="button">Reset</button>
 					{/if}
 				</div>

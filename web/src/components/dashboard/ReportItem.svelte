@@ -45,21 +45,22 @@
 
 <style>
 	.report-item {
-		background: transparent;
-		border: none;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-		border-radius: 0;
-		padding: 9px 10px;
-		transition: background 0.1s;
+		background: rgba(255, 255, 255, 0.025);
+		border: 1px solid rgba(255, 255, 255, 0.05);
+		border-radius: 10px;
+		padding: 12px 14px;
+		transition: all 0.15s ease;
 		flex-shrink: 0;
 	}
 
 	.report-item:hover {
-		background: rgba(255, 255, 255, 0.02);
+		background: rgba(31, 116, 227, 0.08);
+		border-color: rgba(31, 116, 227, 0.25);
 	}
 
 	.report-item.expanded {
-		background: rgba(255, 255, 255, 0.03);
+		background: rgba(31, 116, 227, 0.10);
+		border-color: rgba(31, 116, 227, 0.35);
 	}
 
 	.report-row {
@@ -74,10 +75,10 @@
 	}
 
 	.report-title {
-		color: rgba(255, 255, 255, 0.85);
-		font-size: 12px;
+		color: rgba(255, 255, 255, 0.95);
+		font-size: 13px;
 		font-weight: 600;
-		margin-bottom: 3px;
+		margin-bottom: 4px;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -86,21 +87,29 @@
 	.report-meta {
 		display: flex;
 		align-items: center;
-		gap: 5px;
+		gap: 6px;
 		font-size: 11px;
 	}
 
 	.report-id {
-		color: rgba(255, 255, 255, 0.35);
-		font-family: monospace;
+		background: rgba(16, 185, 129, 0.16);
+		color: rgba(110, 231, 183, 0.95);
+		font-family: "JetBrains Mono", monospace;
+		font-size: 10px;
+		font-weight: 600;
+		padding: 2px 8px;
+		border-radius: 999px;
+		border: 1px solid rgba(16, 185, 129, 0.25);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.report-author {
-		color: rgba(255, 255, 255, 0.35);
+		color: rgba(255, 255, 255, 0.5);
 	}
 
 	.report-date {
-		color: rgba(255, 255, 255, 0.35);
+		color: rgba(255, 255, 255, 0.5);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.dot {

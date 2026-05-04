@@ -99,33 +99,61 @@
 
 <style>
 	.top-bar {
-		background: rgba(13, 13, 13, 0.7);
+		background:
+			radial-gradient(
+				116.96% 90.47% at 50.42% 13.87%,
+				rgba(255, 255, 255, 0.10) 0%,
+				rgba(255, 255, 255, 0) 100%
+			),
+			rgba(13, 17, 30, 0.78);
+		backdrop-filter: blur(calc(var(--u, 0.0926vh) * 15));
+		-webkit-backdrop-filter: blur(calc(var(--u, 0.0926vh) * 15));
 		min-height: 55px;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		padding: 0 20px;
 		color: var(--primary-text);
+		font-family: Gilroy, inherit;
 		font-size: 14px;
 		font-weight: 500;
-		border-bottom: 1px solid var(--border-primary);
+		letter-spacing: 0.01em;
+		border-bottom: 1px solid var(--glass-border, rgba(255, 255, 255, 0.10));
 		z-index: 10;
 		position: relative;
 		cursor: default;
 	}
 
 	:global([data-job-type="ems"]) .top-bar {
-		background: rgba(18, 10, 10, 0.8);
-		border-bottom-color: rgba(220, 50, 50, 0.12);
+		background:
+			radial-gradient(
+				116.96% 90.47% at 50.42% 13.87%,
+				rgba(255, 255, 255, 0.08) 0%,
+				rgba(255, 255, 255, 0) 100%
+			),
+			rgba(28, 12, 12, 0.82);
+		border-bottom-color: rgba(220, 50, 50, 0.18);
 	}
 
 	:global([data-job-type="doj"]) .top-bar {
-		background: rgba(8, 12, 20, 0.8);
-		border-bottom-color: rgba(180, 150, 60, 0.12);
+		background:
+			radial-gradient(
+				116.96% 90.47% at 50.42% 13.87%,
+				rgba(255, 255, 255, 0.08) 0%,
+				rgba(255, 255, 255, 0) 100%
+			),
+			rgba(20, 16, 8, 0.82);
+		border-bottom-color: rgba(196, 154, 56, 0.20);
 	}
 
 	.user-info,
 	.time-info {
 		color: var(--primary-text);
+	}
+
+	.time-info {
+		font-family: Nekst, Gilroy, inherit;
+		letter-spacing: 0.04em;
+		font-variant-numeric: tabular-nums;
 	}
 </style>

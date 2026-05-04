@@ -109,40 +109,77 @@
 
 	let citizenPage = $state(1);
 	let citizenPerPage = $state(25);
+	let totalCitizens = $state(0);
+	let isSearching = $derived(searchQuery.trim().length >= 2);
+	let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	let lastSearchQuery = "";
 
-	let allFilteredCitizens = $derived.by(() => {
-		const query = searchQuery.trim().toLowerCase();
-		if (!query) return citizens;
-		return citizens.filter(({ firstName, lastName, cid, phone }) =>
-			[firstName, lastName, cid, phone].some((val) =>
-				val?.toLowerCase().includes(query),
-			),
-		);
-	});
+	// The server returns a page-sized window already filtered/paginated, so the
+	// list we render is just whatever we last received.
+	let filteredCitizens = $derived(citizens);
 
-	let citizenTotalPages = $derived(Math.max(1, Math.ceil(allFilteredCitizens.length / citizenPerPage)));
-
-	let filteredCitizens = $derived.by(() => {
-		const start = (citizenPage - 1) * citizenPerPage;
-		return allFilteredCitizens.slice(start, start + citizenPerPage);
-	});
-
-	// Reset to page 1 when search changes
 	$effect(() => {
-		searchQuery;
-		citizenPage = 1;
+		if (isEnvBrowser()) return;
+		const q = searchQuery.trim();
+		if (q === lastSearchQuery) return;
+		lastSearchQuery = q;
+		if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+		if (q.length === 0) {
+			citizenPage = 1;
+			loadCitizensPage(1);
+			return;
+		}
+		if (q.length < 2) return;
+		searchDebounceTimer = setTimeout(() => runSearch(q), 250);
 	});
 
-	async function fetchCitizens() {
+	async function loadCitizensPage(page: number) {
+		if (isEnvBrowser()) return;
 		loading = true;
 		try {
-			const result = await fetchNui(NUI_EVENTS.CITIZEN.GET_CITIZENS);
-			citizens = Array.isArray(result) ? result : [];
+			const result = await fetchNui<{ citizens: Citizen[]; total: number } | Citizen[]>(
+				NUI_EVENTS.CITIZEN.GET_CITIZENS,
+				{ page, perPage: citizenPerPage },
+				{ citizens: [], total: 0 },
+			);
+			// Tolerate the legacy flat-array shape during rollout.
+			if (Array.isArray(result)) {
+				citizens = result;
+				totalCitizens = result.length;
+			} else {
+				citizens = Array.isArray(result?.citizens) ? result.citizens : [];
+				totalCitizens = result?.total ?? citizens.length;
+			}
 		} catch (error) {
 			globalNotifications.error("Failed to fetch citizens");
 			citizens = [];
+			totalCitizens = 0;
 		}
 		loading = false;
+	}
+
+	async function runSearch(query: string) {
+		if (isEnvBrowser()) return;
+		loading = true;
+		try {
+			const result = await fetchNui<Citizen[]>(
+				NUI_EVENTS.CITIZEN.SEARCH_CITIZENS,
+				{ query },
+				[],
+			);
+			citizens = Array.isArray(result) ? result : [];
+			totalCitizens = citizens.length;
+			citizenPage = 1;
+		} catch (error) {
+			globalNotifications.error("Failed to search citizens");
+			citizens = [];
+			totalCitizens = 0;
+		}
+		loading = false;
+	}
+
+	async function fetchCitizens() {
+		await loadCitizensPage(citizenPage);
 	}
 
 
@@ -1075,13 +1112,15 @@
 				{#if filteredCitizens.length === 0 && searchQuery}
 					<div class="center-msg"><span>No citizens match your search.</span></div>
 				{/if}
-				<Pagination
-					currentPage={citizenPage}
-					totalItems={allFilteredCitizens.length}
-					perPage={citizenPerPage}
-					onPageChange={(p) => { citizenPage = p; }}
-					onPerPageChange={(pp) => { citizenPerPage = pp; citizenPage = 1; }}
-				/>
+				{#if !isSearching}
+					<Pagination
+						currentPage={citizenPage}
+						totalItems={totalCitizens}
+						perPage={citizenPerPage}
+						onPageChange={(p) => { citizenPage = p; loadCitizensPage(p); }}
+						onPerPageChange={(pp) => { citizenPerPage = pp; citizenPage = 1; loadCitizensPage(1); }}
+					/>
+				{/if}
 			{/if}
 		</div>
 	{/if}

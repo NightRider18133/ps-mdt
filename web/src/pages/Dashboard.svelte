@@ -207,6 +207,14 @@
 </script>
 
 <div class="dashboard">
+	<!-- Page Header -->
+	<div class="page-header">
+		<div class="page-title">
+			<span class="title-bar"></span>
+			<h1>Dashboard</h1>
+		</div>
+	</div>
+
 	<!-- Top Bar: Stats + Bulletin + Quick Actions -->
 	<div class="top-section">
 		<div class="stats-strip">
@@ -519,21 +527,60 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		overflow: hidden;
-		background: var(--card-dark-bg);
+		overflow: auto;
+		background: transparent;
+		padding: 18px 22px 22px;
+		gap: 14px;
 	}
 
-	/* ===== Top Stats Strip ===== */
+	/* ===== Page Header ===== */
+	.page-header {
+		flex-shrink: 0;
+	}
+
+	.page-title {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+
+	.page-title h1 {
+		color: rgba(255, 255, 255, 0.95);
+		font-family: Nekst, Gilroy, inherit;
+		font-size: 22px;
+		font-weight: 600;
+		letter-spacing: 0.01em;
+		margin: 0;
+	}
+
+	.title-bar {
+		display: inline-block;
+		width: 3px;
+		height: 22px;
+		background: var(--accent);
+		border-radius: 2px;
+	}
+
+	/* ===== Top Stats Strip — slimmed, sits above the card grid ===== */
 	.top-section {
 		flex-shrink: 0;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+		background:
+			radial-gradient(
+				116.96% 90.47% at 50.42% 13.87%,
+				rgba(255, 255, 255, 0.06) 0%,
+				rgba(255, 255, 255, 0) 100%
+			),
+			rgba(16, 23, 41, 0.55);
+		border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.10));
+		border-radius: 12px;
+		overflow: hidden;
 	}
 
 	.stats-strip {
 		display: flex;
 		align-items: center;
-		padding: 0 20px;
-		height: 52px;
+		padding: 0 16px;
+		height: 56px;
 		gap: 0;
 	}
 
@@ -700,61 +747,73 @@
 		border-color: rgba(239, 68, 68, 0.25);
 	}
 
-	/* ===== Main Grid ===== */
+	/* ===== Main Grid — card layout with gaps ===== */
 	.main-grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr 1fr;
 		flex: 1;
 		min-height: 0;
+		gap: 14px;
 	}
 
 	.column {
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		border-right: 1px solid rgba(255, 255, 255, 0.06);
+		gap: 14px;
 	}
 
-	.column:last-child {
-		border-right: none;
-	}
-
-	/* ===== Panels ===== */
+	/* ===== Panels — distinct rounded cards ===== */
 	.panel {
 		display: flex;
 		flex-direction: column;
 		flex: 1;
 		min-height: 0;
 		overflow: hidden;
+		background:
+			radial-gradient(
+				120% 100% at 50% 0%,
+				rgba(255, 255, 255, 0.05) 0%,
+				rgba(255, 255, 255, 0) 60%
+			),
+			rgba(16, 23, 41, 0.62);
+		border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.10));
+		border-radius: 14px;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
 	}
 
 	.panel + .panel {
-		border-top: 1px solid rgba(255, 255, 255, 0.06);
+		border-top: 1px solid var(--glass-border, rgba(255, 255, 255, 0.10));
 	}
 
 	.panel-header {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 12px 16px 10px;
+		gap: 10px;
+		padding: 14px 16px 12px;
 		flex-shrink: 0;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 	}
 
 	.panel-title {
-		color: rgba(255, 255, 255, 0.4);
-		font-size: 10px;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 1px;
+		color: rgba(255, 255, 255, 0.92);
+		font-family: Nekst, Gilroy, inherit;
+		font-size: 14px;
+		font-weight: 600;
+		letter-spacing: 0.01em;
+		text-transform: none;
+		flex: 1;
 	}
 
 	.panel-count {
-		background: rgba(255, 255, 255, 0.06);
-		color: rgba(255, 255, 255, 0.35);
-		font-size: 10px;
+		background: rgba(31, 116, 227, 0.16);
+		color: var(--accent-text, #8ec5ff);
+		font-family: "JetBrains Mono", monospace;
+		font-size: 11px;
 		font-weight: 600;
-		padding: 0 5px;
-		border-radius: 4px;
+		padding: 2px 9px;
+		border-radius: 999px;
+		border: 1px solid rgba(31, 116, 227, 0.28);
 		line-height: 16px;
 	}
 
@@ -763,29 +822,29 @@
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
-		padding: 0 10px 10px;
+		padding: 12px;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 8px;
 		scrollbar-width: thin;
 		scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 	}
 
-	.panel-body::-webkit-scrollbar { width: 3px; }
+	.panel-body::-webkit-scrollbar { width: 6px; }
 	.panel-body::-webkit-scrollbar-track { background: transparent; }
-	.panel-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 2px; }
+	.panel-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.10); border-radius: 3px; }
 
-	/* ===== List Items ===== */
+	/* ===== List Items — sub-card style ===== */
 	.list-item {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 8px 10px;
-		border-radius: 6px;
-		background: transparent;
-		border: none;
+		gap: 10px;
+		padding: 12px 14px;
+		border-radius: 10px;
+		background: rgba(255, 255, 255, 0.025);
+		border: 1px solid rgba(255, 255, 255, 0.05);
 		cursor: pointer;
-		transition: background 0.1s;
+		transition: all 0.15s ease;
 		text-align: left;
 		color: inherit;
 		font: inherit;
@@ -793,39 +852,43 @@
 	}
 
 	.list-item:hover {
-		background: rgba(255, 255, 255, 0.04);
+		background: rgba(31, 116, 227, 0.08);
+		border-color: rgba(31, 116, 227, 0.25);
+		transform: translateX(2px);
 	}
 
 	.item-left {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 		flex: 1;
 		min-width: 0;
 	}
 
 	.item-name {
-		color: rgba(255, 255, 255, 0.85);
-		font-size: 12px;
-		font-weight: 500;
+		color: rgba(255, 255, 255, 0.95);
+		font-size: 13px;
+		font-weight: 600;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
 	.item-meta {
-		color: rgba(255, 255, 255, 0.3);
+		color: rgba(255, 255, 255, 0.5);
 		font-size: 11px;
+		font-weight: 400;
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 6px;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.item-notes {
-		color: rgba(255, 255, 255, 0.35);
-		font-size: 11px;
-		line-height: 1.3;
-		margin-top: 1px;
+		color: rgba(255, 255, 255, 0.55);
+		font-size: 11.5px;
+		line-height: 1.4;
+		margin-top: 2px;
 		display: -webkit-box;
 		-webkit-line-clamp: 2;
 		-webkit-box-orient: vertical;
@@ -931,27 +994,31 @@
 		background: rgba(255, 255, 255, 0.02);
 	}
 
-	/* ===== Dispatch Items ===== */
+	/* ===== Dispatch Items — sub-card style ===== */
 	.dispatch-item {
-		border-radius: 6px;
+		border-radius: 10px;
 		overflow: hidden;
-		transition: background 0.1s;
+		transition: all 0.15s ease;
+		background: rgba(255, 255, 255, 0.025);
+		border: 1px solid rgba(255, 255, 255, 0.05);
 	}
 
 	.dispatch-item:hover {
-		background: rgba(255, 255, 255, 0.02);
+		background: rgba(31, 116, 227, 0.06);
+		border-color: rgba(31, 116, 227, 0.20);
 	}
 
 	.dispatch-item.expanded {
-		background: rgba(255, 255, 255, 0.03);
+		background: rgba(31, 116, 227, 0.08);
+		border-color: rgba(31, 116, 227, 0.30);
 	}
 
 	.dispatch-btn {
 		width: 100%;
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 8px 10px;
+		gap: 12px;
+		padding: 12px 14px;
 		background: none;
 		border: none;
 		cursor: pointer;
@@ -1026,18 +1093,21 @@
 	.list-item-btn {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 		width: 100%;
-		padding: 8px 12px;
-		background: none;
-		border: none;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+		padding: 12px 14px;
+		background: rgba(255, 255, 255, 0.025);
+		border: 1px solid rgba(255, 255, 255, 0.05);
+		border-radius: 10px;
 		cursor: pointer;
 		text-align: left;
 		color: inherit;
+		transition: all 0.15s ease;
 	}
 
 	.list-item-btn:hover {
-		background: rgba(255, 255, 255, 0.04);
+		background: rgba(31, 116, 227, 0.08);
+		border-color: rgba(31, 116, 227, 0.25);
+		transform: translateX(2px);
 	}
 </style>
