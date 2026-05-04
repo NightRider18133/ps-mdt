@@ -7,18 +7,14 @@ RegisterNUICallback('getMyProfile', function(data, cb)
 end)
 
 RegisterNUICallback('getCitizens', function(data, cb)
-    if not MDTOpen then cb({}) return end
-    if type(data) ~= 'table' then
-        data = {page = 1}
-    end
-    local page = data.page or 1 -- Default to page 1 if not provided
-    local ok, result = pcall(ps.callback, resourceName..':server:getCitizens', page)
+    if not MDTOpen then cb({ citizens = {}, total = 0 }) return end
+    local payload = type(data) == 'table' and data or { page = 1 }
+    local ok, result = pcall(ps.callback, resourceName..':server:getCitizens', payload)
     if not ok or type(result) ~= 'table' then
         ps.warn('[getCitizens] Server callback failed: ' .. tostring(result))
-        cb({})
+        cb({ citizens = {}, total = 0 })
         return
     end
-    ps.debug(('[getCitizens] Triggered NUI callback on client for page %d'):format(page), result)
     cb(result)
 end)
 

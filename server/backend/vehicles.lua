@@ -63,44 +63,124 @@ local function countSetItems(set)
     return count
 end
 
-ps.registerCallback(resourceName .. ':server:GetVehicles', function(source)
+-- Batch-resolve BOLO flags / report counts for a list of plates.
+-- Returns: { activeByPlate = { [PLATE] = true }, reportCountByPlate = { [PLATE] = N } }
+local function getBoloMetaForPlates(plates)
+    local activeByPlate = {}
+    local reportCountByPlate = {}
+    if not plates or #plates == 0 then
+        return activeByPlate, reportCountByPlate
+    end
+
+    local placeholders = (string.rep('?,', #plates)):sub(1, -2)
+    local params = { 'vehicle' }
+    for i = 1, #plates do
+        params[#params + 1] = plates[i]
+    end
+
+    local rows = MySQL.query.await(([[
+        SELECT
+            UPPER(subject_id) AS plate,
+            SUM(status = 'active') AS active_count,
+            COUNT(DISTINCT reportId) AS report_count
+        FROM mdt_bolos
+        WHERE type = ? AND subject_id IN (%s)
+        GROUP BY UPPER(subject_id)
+    ]]):format(placeholders), params) or {}
+
+    for _, row in ipairs(rows) do
+        if row.plate then
+            if tonumber(row.active_count) and tonumber(row.active_count) > 0 then
+                activeByPlate[row.plate] = true
+            end
+            reportCountByPlate[row.plate] = tonumber(row.report_count) or 0
+        end
+    end
+
+    return activeByPlate, reportCountByPlate
+end
+
+local function rowToVehicle(v, activeByPlate, reportCountByPlate)
+    local vehicleData = getVehicleShared(v.vehicle)
+    local plate = v.plate and string.upper(v.plate) or 'UNKNOWN'
+    local hasActiveBolo = activeByPlate[plate] == true or v.boloactive == 1
+    local flags = buildVehicleFlags(v.stolen == 1, hasActiveBolo, v.status)
+
+    return {
+        id = v.id,
+        model = v.vehicle,
+        label = vehicleData and vehicleData.name or 'Unknown Vehicle',
+        plate = plate,
+        owner = ps.getPlayerNameByIdentifier(v.citizenid) or 'Unknown',
+        class = formatLabel(vehicleData and vehicleData.category or 'Unknown'),
+        type = formatLabel(vehicleData and vehicleData.type or 'Unknown'),
+        flags = flags,
+        image = (v.image and v.image ~= '' and v.image) or ('https://docs.fivem.net/vehicles/' .. v.vehicle .. '.webp'),
+        seenIn = reportCountByPlate[plate] or 0,
+        points = tonumber(v.points) or 0,
+        status = v.status or 'valid',
+        core_state = tonumber(v.core_state) or 0,
+    }
+end
+
+local VEHICLE_LIST_COLUMNS = [[
+    pv.id,
+    pv.plate,
+    pv.vehicle,
+    pv.citizenid,
+    pv.mdt_vehicle_points AS points,
+    pv.mdt_vehicle_status AS status,
+    pv.mdt_vehicle_stolen AS stolen,
+    pv.mdt_vehicle_boloactive AS boloactive,
+    pv.mdt_vehicle_image AS image,
+    pv.state AS core_state
+]]
+
+ps.registerCallback(resourceName .. ':server:GetVehicles', function(source, payload)
     local startTime = os.clock()
     local src = source
     if not CheckAuth(src) then return end
 
-    local vehList = MySQL.query.await([[
-        SELECT
-            pv.id,
-            pv.plate,
-            pv.vehicle,
-            pv.citizenid,
-            pv.mdt_vehicle_information AS information,
-            pv.mdt_vehicle_points AS points,
-            pv.mdt_vehicle_status AS status,
-            pv.mdt_vehicle_stolen AS stolen,
-            pv.mdt_vehicle_boloactive AS boloactive,
-            pv.mdt_vehicle_image AS image,
-            pv.state AS core_state
+    payload = type(payload) == 'table' and payload or {}
+    local page = math.max(1, tonumber(payload.page) or 1)
+    local limit = Config.Pagination and Config.Pagination.Vehicles or 50
+    if payload.perPage then
+        local pp = tonumber(payload.perPage) or limit
+        limit = math.max(10, math.min(pp, 200))
+    end
+    local offset = (page - 1) * limit
+
+    local total = MySQL.scalar.await('SELECT COUNT(*) FROM player_vehicles') or 0
+
+    local vehList = MySQL.query.await(([[
+        SELECT %s
         FROM player_vehicles pv
-    ]])
+        ORDER BY pv.id ASC
+        LIMIT ? OFFSET ?
+    ]]):format(VEHICLE_LIST_COLUMNS), { limit, offset }) or {}
 
-    local boloRows = MySQL.query.await('SELECT * FROM mdt_bolos WHERE type = ? AND status = ?', {'vehicle', 'active'})
-    local reportIdsByPlate = {}
-    local activeBoloByPlate = {}
-    local bolos = {}
-
-    for _, bolo in pairs(boloRows) do
-        local plate = bolo.subject_id and string.upper(tostring(bolo.subject_id)) or nil
-        if plate then
-            reportIdsByPlate[plate] = reportIdsByPlate[plate] or {}
-            if bolo.reportId then
-                reportIdsByPlate[plate][tostring(bolo.reportId)] = true
-            end
-            if bolo.status == 'active' then
-                activeBoloByPlate[plate] = true
-            end
+    -- Collect plates from this page only and resolve BOLO state in one query.
+    local plates = {}
+    for i = 1, #vehList do
+        if vehList[i].plate then
+            plates[#plates + 1] = vehList[i].plate
         end
-        table.insert(bolos, {
+    end
+    local activeByPlate, reportCountByPlate = getBoloMetaForPlates(plates)
+
+    local vehicles = {}
+    for _, v in ipairs(vehList) do
+        vehicles[#vehicles + 1] = rowToVehicle(v, activeByPlate, reportCountByPlate)
+    end
+
+    -- Active vehicle BOLOs as a separate, bounded list (not joined per-row).
+    local boloRows = MySQL.query.await(
+        'SELECT id, reportId, subject_id, subject_name, type, notes, status, image FROM mdt_bolos WHERE type = ? AND status = ? ORDER BY id DESC LIMIT 200',
+        { 'vehicle', 'active' }
+    ) or {}
+    local bolos = {}
+    for _, bolo in ipairs(boloRows) do
+        bolos[#bolos + 1] = {
             id = bolo.id,
             reportId = bolo.reportId and tostring(bolo.reportId) or 'N/A',
             name = bolo.subject_name or 'Unknown Vehicle',
@@ -109,46 +189,64 @@ ps.registerCallback(resourceName .. ':server:GetVehicles', function(source)
             status = bolo.status,
             plate = bolo.subject_id or 'Unknown',
             image = bolo.image or 'https://docs.fivem.net/vehicles/elegy.webp',
-        })
+        }
     end
+
+    local elapsedTime = (os.clock() - startTime) * 1000
+    ps.debug(string.format("getVehicles callback executed in %.2f ms (page %d, %d rows)", elapsedTime, page, #vehicles))
+
+    return {
+        vehicles = vehicles,
+        bolos = bolos,
+        page = page,
+        perPage = limit,
+        total = tonumber(total) or 0,
+    }
+end)
+
+ps.registerCallback(resourceName .. ':server:SearchVehicles', function(source, payload)
+    local src = source
+    if not CheckAuth(src) then return { vehicles = {}, total = 0 } end
+
+    payload = type(payload) == 'table' and payload or {}
+    local query = payload.query
+    if type(query) ~= 'string' or #query < 2 then
+        return { vehicles = {}, total = 0 }
+    end
+
+    local limit = Config.Pagination and Config.Pagination.VehicleSearch or 50
+    local needle = '%' .. string.lower(query) .. '%'
+
+    if ps.auditLog then
+        ps.auditLog(src, 'search_vehicles', 'search', nil, { query = query })
+    end
+
+    -- Plate is the most useful index — push it through a sargable lookup first,
+    -- then OR a few fuzzier filters so owners and models still match.
+    local rows = MySQL.query.await(([[
+        SELECT %s
+        FROM player_vehicles pv
+        WHERE LOWER(pv.plate) LIKE ?
+           OR LOWER(pv.vehicle) LIKE ?
+           OR LOWER(pv.citizenid) LIKE ?
+        ORDER BY pv.id ASC
+        LIMIT ?
+    ]]):format(VEHICLE_LIST_COLUMNS), { needle, needle, needle, limit }) or {}
+
+    local plates = {}
+    for i = 1, #rows do
+        if rows[i].plate then
+            plates[#plates + 1] = rows[i].plate
+        end
+    end
+    local activeByPlate, reportCountByPlate = getBoloMetaForPlates(plates)
 
     local vehicles = {}
-    for _, v in ipairs(vehList) do
-        local vehicleData = getVehicleShared(v.vehicle)
-        local plate = v.plate and string.upper(v.plate) or 'UNKNOWN'
-        local reportCount = countSetItems(reportIdsByPlate[plate])
-        local hasActiveBolo = activeBoloByPlate[plate] == true or v.boloactive == 1
-        local flags = buildVehicleFlags(v.stolen == 1, hasActiveBolo, v.status)
-
-        table.insert(vehicles, {
-            id = v.id,
-            model = v.vehicle,
-            label = vehicleData and vehicleData.name or 'Unknown Vehicle',
-            plate = plate,
-            owner = ps.getPlayerNameByIdentifier(v.citizenid) or 'Unknown',
-            class = formatLabel(vehicleData and vehicleData.category or 'Unknown'),
-            type = formatLabel(vehicleData and vehicleData.type or 'Unknown'),
-            flags = flags,
-            image = (v.image and v.image ~= '' and v.image) or ('https://docs.fivem.net/vehicles/' .. v.vehicle .. '.webp'),
-            seenIn = reportCount,
-            points = tonumber(v.points) or 0,
-            status = v.status or 'valid',
-            core_state = tonumber(v.core_state) or 0,
-        })
+    for _, v in ipairs(rows) do
+        vehicles[#vehicles + 1] = rowToVehicle(v, activeByPlate, reportCountByPlate)
     end
 
-    local endTime = os.clock()
-    local elapsedTime = (endTime - startTime) * 1000
-    ps.debug(string.format("getVehicles callback executed in %.2f ms", elapsedTime))
-
-    if vehicles[1] then
-        ps.debug('[getVehicles] Sample vehicle data structure:', vehicles[1])
-    end
-    if bolos[1] then
-        ps.debug('[getVehicles] Sample bolo data structure:', bolos[1])
-    end
-
-    return {vehicles = vehicles, bolos = bolos}
+    return { vehicles = vehicles, total = #vehicles, page = 1, perPage = limit }
 end)
 
 ps.registerCallback(resourceName .. ':server:UpdateVehicle', function(source, payload)

@@ -109,15 +109,23 @@ ps.registerCallback(resourceName .. ':server:getPermissionRoles', function(sourc
     local hasBossAccess = false
     if ps and ps.getJobData then
         local jobData = ps.getJobData(src)
-        if jobData and jobData.grade then
-            if type(jobData.grade) == 'table' then
+        if jobData then
+            -- qbx_core puts isboss on the job; qb-core puts it on the grade.
+            -- Check both schemas plus the ps_lib helper as a safety net.
+            if jobData.isboss == true or jobData.isBoss == true or jobData.boss == true then
+                hasBossAccess = true
+            elseif type(jobData.grade) == 'table' then
                 hasBossAccess = jobData.grade.isboss == true or jobData.grade.isBoss == true or jobData.grade.boss == true
-            else
+            elseif jobData.grade then
                 local grades = job and job.grades and normalizeGrades(job.grades) or nil
                 if grades then
                     local gradeData = grades[tostring(jobData.grade)]
                     hasBossAccess = isBossGrade(gradeData)
                 end
+            end
+            if not hasBossAccess and ps.isBoss then
+                local ok, result = pcall(ps.isBoss, src)
+                if ok and result == true then hasBossAccess = true end
             end
         end
     end
@@ -331,12 +339,16 @@ ps.registerCallback(resourceName .. ':server:getTags', function(source, data)
     data = data or {}
     local jobType = data.jobType
 
+    -- COLLATE clauses force consistent comparison; mdt_tags.name and
+    -- mdt_*_tags.tag may have different collations on legacy installs.
     local query, params
     if jobType and (jobType == 'leo' or jobType == 'ems') then
         query = [[
             SELECT t.id, t.name, t.type, t.color, t.job_type, t.created_at,
-                   (SELECT COUNT(*) FROM mdt_profiles_tags pt WHERE pt.tag = t.name) +
-                   (SELECT COUNT(*) FROM mdt_reports_tags rt WHERE rt.tag = t.name) AS usage_count
+                   (SELECT COUNT(*) FROM mdt_profiles_tags pt
+                    WHERE pt.tag COLLATE utf8mb4_general_ci = t.name COLLATE utf8mb4_general_ci) +
+                   (SELECT COUNT(*) FROM mdt_reports_tags rt
+                    WHERE rt.tag COLLATE utf8mb4_general_ci = t.name COLLATE utf8mb4_general_ci) AS usage_count
             FROM mdt_tags t
             WHERE t.job_type = ? OR t.job_type = 'all'
             ORDER BY t.name ASC
@@ -345,8 +357,10 @@ ps.registerCallback(resourceName .. ':server:getTags', function(source, data)
     else
         query = [[
             SELECT t.id, t.name, t.type, t.color, t.job_type, t.created_at,
-                   (SELECT COUNT(*) FROM mdt_profiles_tags pt WHERE pt.tag = t.name) +
-                   (SELECT COUNT(*) FROM mdt_reports_tags rt WHERE rt.tag = t.name) AS usage_count
+                   (SELECT COUNT(*) FROM mdt_profiles_tags pt
+                    WHERE pt.tag COLLATE utf8mb4_general_ci = t.name COLLATE utf8mb4_general_ci) +
+                   (SELECT COUNT(*) FROM mdt_reports_tags rt
+                    WHERE rt.tag COLLATE utf8mb4_general_ci = t.name COLLATE utf8mb4_general_ci) AS usage_count
             FROM mdt_tags t
             ORDER BY t.name ASC
         ]]

@@ -111,43 +111,114 @@ end
 
 exports('registerWeapon', registerWeapon)
 
-ps.registerCallback('ps-mdt:server:getWeapons', function(source)
-    if not CheckAuth(source) then return {} end
-    local weapons = MySQL.query.await('SELECT * FROM mdt_weapons')
-    local newData = {}
-    local weaponBolo = {}
-    for k, v in pairs(weapons) do
-        -- Resolve owner name: try mdt_profiles first, then ps_lib lookup
-        local ownerName = 'Unknown'
-        if v.owner and v.owner ~= '' then
-            local profile = MySQL.single.await('SELECT fullname FROM mdt_profiles WHERE citizenid = ?', { v.owner })
-            if profile and profile.fullname and profile.fullname ~= '' then
-                ownerName = profile.fullname
-            else
-                ownerName = ps.getPlayerNameByIdentifier(v.owner) or 'Unknown'
-            end
-        end
+-- Look up a weapon's display label safely. GetHashKey crashes on nil, and
+-- legacy rows may have NULL weaponModel (the column was added later), so
+-- guard the lookup explicitly.
+local function resolveWeaponLabel(weaponModel)
+    if not weaponModel or weaponModel == '' then return 'Unknown' end
+    if QBCore and QBCore.Shared and QBCore.Shared.Weapons then
+        local entry = QBCore.Shared.Weapons[GetHashKey(weaponModel)]
+        if entry and entry.label then return entry.label end
+    end
+    return weaponModel
+end
 
-        -- Normalize weapon model to lowercase for class table lookup
-        local modelLower = v.weaponModel and string.lower(v.weaponModel) or ''
-        local weaponInfo = {
-            id = v.id,
-            serial = v.serial,
-            scratched = v.scratched == 1,
-            owner = ownerName,
-            information = v.information,
-            weaponClass = v.weaponClass,
-            weaponModel = v.weaponModel,
-            name = (QBCore and QBCore.Shared and QBCore.Shared.Weapons and QBCore.Shared.Weapons[GetHashKey(v.weaponModel)] and QBCore.Shared.Weapons[GetHashKey(v.weaponModel)].label) or v.weaponModel,
-            image = 'https://docs.fivem.net/weapons/' .. v.weaponModel:upper() .. '.png',
-            type = class[modelLower] and class[modelLower].type or 'unknown',
-        }
-        table.insert(newData, weaponInfo)
+-- Resolve owner display names for a list of citizen IDs in a single query.
+-- Falls back to ps.getPlayerNameByIdentifier for IDs that have no profile row.
+local function resolveOwnerNames(citizenids)
+    local out = {}
+    if not citizenids or #citizenids == 0 then return out end
+
+    local seen = {}
+    local unique = {}
+    for i = 1, #citizenids do
+        local cid = citizenids[i]
+        if cid and cid ~= '' and not seen[cid] then
+            seen[cid] = true
+            unique[#unique + 1] = cid
+        end
+    end
+    if #unique == 0 then return out end
+
+    local placeholders = (string.rep('?,', #unique)):sub(1, -2)
+    local rows = MySQL.query.await(
+        ('SELECT citizenid, fullname FROM mdt_profiles WHERE citizenid IN (%s)'):format(placeholders),
+        unique
+    ) or {}
+    for _, row in ipairs(rows) do
+        if row.fullname and row.fullname ~= '' then
+            out[row.citizenid] = row.fullname
+        end
     end
 
-    local weaponBolos = MySQL.query.await('SELECT * FROM mdt_bolos WHERE type = ? AND status = ?', {'weapon', 'active'})
-    for k, v in pairs(weaponBolos) do
-        table.insert(weaponBolo, {
+    -- Fall back for any unique cid that had no profile row.
+    for _, cid in ipairs(unique) do
+        if not out[cid] then
+            out[cid] = ps.getPlayerNameByIdentifier(cid) or 'Unknown'
+        end
+    end
+    return out
+end
+
+local function rowToWeapon(v, ownerNames)
+    local modelLower = v.weaponModel and string.lower(v.weaponModel) or ''
+    local ownerName = (v.owner and v.owner ~= '' and ownerNames[v.owner]) or 'Unknown'
+    return {
+        id = v.id,
+        serial = v.serial,
+        scratched = v.scratched == 1,
+        owner = ownerName,
+        information = v.information,
+        weaponClass = v.weaponClass,
+        weaponModel = v.weaponModel,
+        name = resolveWeaponLabel(v.weaponModel),
+        image = v.weaponModel
+            and ('https://docs.fivem.net/weapons/' .. v.weaponModel:upper() .. '.png')
+            or '',
+        type = class[modelLower] and class[modelLower].type or 'unknown',
+    }
+end
+
+local WEAPON_LIST_COLUMNS = 'id, serial, scratched, owner, information, weaponClass, weaponModel'
+
+ps.registerCallback('ps-mdt:server:getWeapons', function(source, payload)
+    local startTime = os.clock()
+    if not CheckAuth(source) then return { weapons = {}, bolos = {}, total = 0 } end
+
+    payload = type(payload) == 'table' and payload or {}
+    local page = math.max(1, tonumber(payload.page) or 1)
+    local limit = Config.Pagination and Config.Pagination.Weapons or 50
+    if payload.perPage then
+        local pp = tonumber(payload.perPage) or limit
+        limit = math.max(10, math.min(pp, 200))
+    end
+    local offset = (page - 1) * limit
+
+    local total = MySQL.scalar.await('SELECT COUNT(*) FROM mdt_weapons') or 0
+
+    local weapons = MySQL.query.await(
+        ('SELECT %s FROM mdt_weapons ORDER BY id DESC LIMIT ? OFFSET ?'):format(WEAPON_LIST_COLUMNS),
+        { limit, offset }
+    ) or {}
+
+    local cids = {}
+    for i = 1, #weapons do
+        cids[#cids + 1] = weapons[i].owner
+    end
+    local ownerNames = resolveOwnerNames(cids)
+
+    local newData = {}
+    for _, v in ipairs(weapons) do
+        newData[#newData + 1] = rowToWeapon(v, ownerNames)
+    end
+
+    local weaponBolos = MySQL.query.await(
+        'SELECT id, reportId, subject_id, subject_name, type, notes, status FROM mdt_bolos WHERE type = ? AND status = ? ORDER BY id DESC LIMIT 200',
+        { 'weapon', 'active' }
+    ) or {}
+    local weaponBolo = {}
+    for _, v in ipairs(weaponBolos) do
+        weaponBolo[#weaponBolo + 1] = {
             id = v.id,
             reportId = v.reportId and tostring(v.reportId) or 'N/A',
             name = v.subject_name or 'Unknown Weapon',
@@ -155,9 +226,59 @@ ps.registerCallback('ps-mdt:server:getWeapons', function(source)
             notes = v.notes or '',
             status = v.status,
             serial = v.subject_id or 'Unknown',
-        })
+        }
     end
-    return { weapons = newData, bolos = weaponBolo }
+
+    local elapsed = (os.clock() - startTime) * 1000
+    ps.debug(string.format("getWeapons callback executed in %.2f ms (page %d, %d rows)", elapsed, page, #newData))
+
+    return {
+        weapons = newData,
+        bolos = weaponBolo,
+        page = page,
+        perPage = limit,
+        total = tonumber(total) or 0,
+    }
+end)
+
+ps.registerCallback('ps-mdt:server:searchWeapons', function(source, payload)
+    if not CheckAuth(source) then return { weapons = {}, total = 0 } end
+
+    payload = type(payload) == 'table' and payload or {}
+    local query = payload.query
+    if type(query) ~= 'string' or #query < 2 then
+        return { weapons = {}, total = 0 }
+    end
+
+    local limit = Config.Pagination and Config.Pagination.WeaponSearch or 50
+    local needle = '%' .. string.lower(query) .. '%'
+
+    if ps.auditLog then
+        ps.auditLog(source, 'search_weapons', 'search', nil, { query = query })
+    end
+
+    local rows = MySQL.query.await(([[
+        SELECT %s
+        FROM mdt_weapons
+        WHERE LOWER(serial) LIKE ?
+           OR LOWER(weaponModel) LIKE ?
+           OR LOWER(owner) LIKE ?
+        ORDER BY id DESC
+        LIMIT ?
+    ]]):format(WEAPON_LIST_COLUMNS), { needle, needle, needle, limit }) or {}
+
+    local cids = {}
+    for i = 1, #rows do
+        cids[#cids + 1] = rows[i].owner
+    end
+    local ownerNames = resolveOwnerNames(cids)
+
+    local out = {}
+    for _, v in ipairs(rows) do
+        out[#out + 1] = rowToWeapon(v, ownerNames)
+    end
+
+    return { weapons = out, total = #out, page = 1, perPage = limit }
 end)
 
 ps.registerCallback(resourceName .. ':server:getWeaponOwnershipHistory', function(source, serial)

@@ -74,23 +74,54 @@ local function getGender(gen)
     return 'Unknown'
 end
 
--- Safe query helper: returns empty table on error (handles missing tables gracefully)
+-- Cache of "table is known to be absent" so we don't spam the log every time
+-- a missing optional table (e.g. player_houses on setups using a different
+-- properties resource) is queried. Cleared on resource start.
+local missingTableCache = {}
+
+-- Safe query helper: returns empty table on error (handles missing tables
+-- gracefully). After the first "doesn't exist" error per table, subsequent
+-- queries skip the network round-trip entirely and return empty silently.
 local function safeQuery(query, params)
+    -- Extract `FROM <table>` so we can short-circuit known-missing tables.
+    local fromTable = query:match('FROM%s+`?([%w_]+)`?')
+    if fromTable and missingTableCache[fromTable] then
+        return {}
+    end
+
     local ok, rows = pcall(MySQL.query.await, query, params)
     if not ok then
-        ps.warn('[getCitizens] Query failed (table may not exist): ' .. tostring(rows))
+        local err = tostring(rows)
+        if fromTable and err:find("doesn't exist", 1, true) then
+            -- Warn once, then suppress further attempts at this table.
+            missingTableCache[fromTable] = true
+            ps.warn(('[getCitizens] Table `%s` not present — skipping further queries against it'):format(fromTable))
+        else
+            ps.warn('[getCitizens] Query failed: ' .. err)
+        end
         return {}
     end
     return rows or {}
 end
 
 -- getCitizens - pulls citizens from database with pagination support
-ps.registerCallback(resourceName .. ':server:getCitizens', function(source, page)
+ps.registerCallback(resourceName .. ':server:getCitizens', function(source, payload)
     local src = source
-    if not CheckAuth(src) then return {} end
+    if not CheckAuth(src) then return { citizens = {}, total = 0 } end
     local startTime = os.clock()
-    page = page or 1 -- Default to page 1 if not provided
+
+    local page, perPage
+    if type(payload) == 'table' then
+        page = payload.page
+        perPage = payload.perPage
+    else
+        page = payload
+    end
+    page = math.max(1, tonumber(page) or 1)
     local limit = Config.Pagination and Config.Pagination.Citizens or 20
+    if perPage then
+        limit = math.max(10, math.min(tonumber(perPage) or limit, 200))
+    end
     local offset = (page - 1) * limit
 
     -- Main query with pagination
@@ -107,7 +138,11 @@ ps.registerCallback(resourceName .. ':server:getCitizens', function(source, page
         LIMIT ? OFFSET ?
     ]]
     local result = safeQuery(query, { limit, offset })
-    if not result or #result == 0 then return {} end
+    if not result or #result == 0 then
+        return { citizens = {}, total = 0, page = page, perPage = limit }
+    end
+
+    local total = MySQL.scalar.await('SELECT COUNT(*) FROM players') or 0
 
     local citizenids = {}
     for _, v in ipairs(result) do
@@ -167,8 +202,8 @@ ps.registerCallback(resourceName .. ':server:getCitizens', function(source, page
         end
     end
 
-    for _, v in ipairs(result) do
-        v.id = _
+    for i, v in ipairs(result) do
+        v.id = v.id or i
         v.cid = v.citizenid
         v.firstName = v.firstname
         v.lastName = v.lastname
@@ -186,11 +221,12 @@ ps.registerCallback(resourceName .. ':server:getCitizens', function(source, page
     local elapsedTime = (endTime - startTime) * 1000
     ps.debug(string.format("getCitizens callback executed in %.2f ms for page %d", elapsedTime, page))
 
-    if result[1] then
-        ps.debug('[getCitizens] Sample citizen data structure:', result[1])
-    end
-
-    return result
+    return {
+        citizens = result,
+        total = tonumber(total) or 0,
+        page = page,
+        perPage = limit,
+    }
 end)
 
 -- searchPlayers - searches the database for citizens by provided query (first/last name, citizenid, phone number, occupation)
@@ -300,8 +336,8 @@ ps.registerCallback(resourceName .. ':server:searchCitizens', function(source, q
         end
     end
 
-    for _, v in ipairs(result) do
-        v.id = _
+    for i, v in ipairs(result) do
+        v.id = v.id or i
         v.cid = v.citizenid
         v.firstName = v.firstname
         v.lastName = v.lastname
@@ -420,7 +456,12 @@ ps.registerCallback(resourceName .. ':server:getCitizenProfile', function(source
     local flags = collectCitizenFlags({ citizenid })
     local vehicles = MySQL.query.await('SELECT plate, vehicle FROM player_vehicles WHERE citizenid = ?', { citizenid }) or {}
     local vehiclesCount = #vehicles
-    local properties = MySQL.query.await('SELECT house FROM player_houses WHERE citizenid = ?', { citizenid }) or {}
+    -- player_houses is owned by qb-core/qbx_core; not every framework ships
+    -- it (e.g. setups using qbx_properties instead). Guard the query so a
+    -- missing table degrades gracefully to "0 properties".
+    local _ok, properties = pcall(MySQL.query.await,
+        'SELECT house FROM player_houses WHERE citizenid = ?', { citizenid })
+    if not _ok or type(properties) ~= 'table' then properties = {} end
     local propertiesCount = #properties
     local arrestsCount = MySQL.scalar.await('SELECT COUNT(*) FROM mdt_arrests WHERE citizenid = ?', { citizenid }) or 0
     local activeWarrants = MySQL.query.await([[
@@ -1055,9 +1096,16 @@ ps.registerCallback(resourceName .. ':server:getMyProfile', function(source)
         if rid and not reportIdSet[rid] then reportIdSet[rid] = true end
     end
 
-    for rid, _ in pairs(reportIdSet) do
-        local rOk, report = pcall(MySQL.single.await, 'SELECT id, title, type FROM mdt_reports WHERE id = ?', { rid })
-        if rOk and report then
+    local reportIds = {}
+    for rid in pairs(reportIdSet) do
+        reportIds[#reportIds + 1] = rid
+    end
+    if #reportIds > 0 then
+        local placeholders = (string.rep('?,', #reportIds)):sub(1, -2)
+        local rOk, reports = pcall(MySQL.query.await,
+            ('SELECT id, title, type FROM mdt_reports WHERE id IN (%s)'):format(placeholders),
+            reportIds)
+        for _, report in ipairs(rOk and reports or {}) do
             linkedReports[#linkedReports + 1] = { id = report.id, title = report.title, type = report.type }
         end
     end

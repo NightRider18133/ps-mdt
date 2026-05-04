@@ -1,5 +1,33 @@
 -- Authorisation --
 
+-- Returns true if the player is a "boss" (every permission auto-granted).
+-- Handles both schemas:
+--   * qb-core puts isboss/boss on the grade object  (job.grade.isboss)
+--   * qbx_core puts isboss on the job object       (job.isboss)
+-- and falls back to ps_lib's helper.
+local function playerIsBoss(source)
+    if ps and ps.isBoss then
+        local ok, result = pcall(ps.isBoss, source)
+        if ok and result == true then return true end
+    end
+
+    local jobData = ps and ps.getJobData and ps.getJobData(source) or nil
+    if not jobData then return false end
+
+    if jobData.isboss == true or jobData.isBoss == true or jobData.boss == true then
+        return true
+    end
+
+    if type(jobData.grade) == 'table' then
+        local g = jobData.grade
+        if g.isboss == true or g.isBoss == true or g.boss == true then
+            return true
+        end
+    end
+
+    return false
+end
+
 local function isDojJob(jobName)
     if not jobName or not Config.DojJobs then return false end
     for _, name in ipairs(Config.DojJobs) do
@@ -29,23 +57,19 @@ end
 function CheckPermission(source, permName)
     if not source or not permName then return false end
 
-    -- Boss always has all permissions
-    if ps.isBoss and ps.isBoss(source) then return true end
+    -- Boss always has all permissions (works for both qb and qbx schemas)
+    if playerIsBoss(source) then return true end
 
     local jobData = ps.getJobData and ps.getJobData(source) or nil
-    local isBoss = false
     local gradeValue = 0
 
     if jobData and jobData.grade then
         if type(jobData.grade) == 'table' then
             gradeValue = jobData.grade.level or jobData.grade.grade or jobData.grade.rank or jobData.grade.value or jobData.grade.id or 0
-            isBoss = jobData.grade.isboss == true or jobData.grade.isBoss == true or jobData.grade.boss == true
         else
             gradeValue = jobData.grade
         end
     end
-
-    if isBoss then return true end
 
     local jobName = ps.getJobName(source) or 'police'
     local gradeStr = tostring(gradeValue)
@@ -218,19 +242,17 @@ ps.registerCallback(tostring(GetCurrentResourceName())..':server:getMyPermission
     local jobName = ps.getJobName(src) or 'police'
     local jobData = ps.getJobData and ps.getJobData(src) or nil
     local gradeValue = 0
-    local isBoss = false
 
     if jobData and jobData.grade then
         if type(jobData.grade) == 'table' then
             gradeValue = jobData.grade.level or jobData.grade.grade or jobData.grade.rank or jobData.grade.value or jobData.grade.id or 0
-            isBoss = jobData.grade.isboss == true or jobData.grade.isBoss == true or jobData.grade.boss == true
         else
             gradeValue = jobData.grade
         end
     end
 
-    -- Boss gets all permissions
-    if isBoss or (ps.isBoss and ps.isBoss(src)) then
+    -- Boss gets all permissions (handles both qb-core and qbx_core schemas)
+    if playerIsBoss(src) then
         local allPerms = (Config and Config.ManagementPermissions) or {}
         return { permissions = allPerms, isBoss = true }
     end

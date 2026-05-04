@@ -950,10 +950,14 @@ ps.registerCallback(resourceName..':server:getAvailableTags', function(source, p
 
     local jt = playerJobType or 'leo'
 
-    -- Pull from master mdt_tags table (report + both types) filtered by job_type
+    -- Pull from master mdt_tags table (report + both types) filtered by job_type.
+    -- COLLATE clauses force consistent comparison between mdt_tags.name (the
+    -- legacy table's collation) and mdt_reports_tags.tag (created with a newer
+    -- one). Without them MariaDB throws "Illegal mix of collations".
     local tags = MySQL.query.await([[
         SELECT t.name, t.color,
-               (SELECT COUNT(*) FROM mdt_reports_tags rt WHERE rt.tag = t.name) AS usage_count
+               (SELECT COUNT(*) FROM mdt_reports_tags rt
+                WHERE rt.tag COLLATE utf8mb4_general_ci = t.name COLLATE utf8mb4_general_ci) AS usage_count
         FROM mdt_tags t
         WHERE t.type IN ('report', 'both')
           AND (t.job_type = ? OR t.job_type = 'all')

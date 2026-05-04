@@ -2,9 +2,20 @@ local resourceName = tostring(GetCurrentResourceName())
 
 RegisterNUICallback('getWeapons', function(data, cb)
     if not MDTOpen then cb({}) return end
-    local weaponList = ps.callback('ps-mdt:server:getWeapons')
-    ps.debug('getWeapons', weaponList)
-    cb(weaponList)
+    local payload = type(data) == 'table' and data or {}
+    local weaponList = ps.callback('ps-mdt:server:getWeapons', payload)
+    cb(weaponList or { weapons = {}, bolos = {} })
+end)
+
+RegisterNUICallback('searchWeapons', function(data, cb)
+    if not MDTOpen then cb({ weapons = {}, total = 0 }) return end
+    local payload = type(data) == 'table' and data or {}
+    if not payload.query or #tostring(payload.query) < 2 then
+        cb({ weapons = {}, total = 0 })
+        return
+    end
+    local result = ps.callback('ps-mdt:server:searchWeapons', payload)
+    cb(result or { weapons = {}, total = 0 })
 end)
 
 RegisterNUICallback('getWeaponBolos', function(data, cb)

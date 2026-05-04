@@ -5,9 +5,20 @@ RegisterNUICallback('getVehicles', function(data, cb)
         cb({ success = false, message = 'MDT is not open', vehicles = {}, bolos = {} })
         return
     end
-    local vehicleList = ps.callback(resourceName .. ':server:GetVehicles')
-    ps.debug('[getVehicles] Triggered NUI callback on client', vehicleList)
-    cb(vehicleList)
+    local payload = type(data) == 'table' and data or {}
+    local vehicleList = ps.callback(resourceName .. ':server:GetVehicles', payload)
+    cb(vehicleList or { vehicles = {}, bolos = {} })
+end)
+
+RegisterNUICallback('searchVehicles', function(data, cb)
+    if not MDTOpen then cb({ vehicles = {}, total = 0 }) return end
+    local payload = type(data) == 'table' and data or {}
+    if not payload.query or #tostring(payload.query) < 2 then
+        cb({ vehicles = {}, total = 0 })
+        return
+    end
+    local result = ps.callback(resourceName .. ':server:SearchVehicles', payload)
+    cb(result or { vehicles = {}, total = 0 })
 end)
 
 RegisterNUICallback('getVehicleBolos', function(data, cb)
