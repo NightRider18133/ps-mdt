@@ -1,26 +1,30 @@
 :root {
-	font-family:
-		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	/* Resolution-independent unit, matching NR_Tablet's
+	   `calc(0.092592592vh * X)` pattern (1u ≈ 1px @ 1080p). */
+	--u: 0.092592592vh;
+
+	font-family: Gilroy, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont,
+		"Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 	line-height: 1.5;
 	font-weight: 400;
-	color: rgba(255, 255, 255, 0.87);
+	color: rgba(255, 255, 255, 0.92);
 	font-synthesis: none;
 	text-rendering: geometricPrecision;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 
-	/* Accent (customizable via Colors settings) */
-	--accent-rgb: 59, 130, 246;
-	--accent-text-rgb: 147, 197, 253;
+	/* Accent: NR_Tablet blue (#1f74e3) */
+	--accent-rgb: 31, 116, 227;
+	--accent-text-rgb: 142, 197, 255;
 
-	/* Background */
-	--dark-bg: rgb(23, 23, 23);
-	--light-bg: #1d1d1d;
-	--card-dark-bg: rgb(14, 15, 15);
+	/* Background — deep navy with translucent surfaces */
+	--dark-bg: rgb(11, 14, 24);
+	--light-bg: #161b29;
+	--card-dark-bg: rgba(16, 23, 41, 0.78);
 	--card-light-bg: rgb(255, 255, 255);
-	--secondary-bg: rgb(29, 29, 29);
-	--hover-bg: rgba(255, 255, 255, 0.05);
-	--active-bg: rgba(255, 255, 255, 0.1);
+	--secondary-bg: rgba(22, 30, 50, 0.65);
+	--hover-bg: rgba(255, 255, 255, 0.06);
+	--active-bg: rgba(31, 116, 227, 0.16);
 
 	/* Text */
 	--primary-text: rgba(255, 255, 255, 0.87);
@@ -29,9 +33,9 @@
 	--disabled-text: rgba(255, 255, 255, 0.5);
 
 	/* Border */
-	--border-primary: rgba(255, 255, 255, 0.1);
+	--border-primary: rgba(255, 255, 255, 0.12);
 	--border-secondary: rgba(255, 255, 255, 0.2);
-	--border-hover: rgba(255, 255, 255, 0.3);
+	--border-hover: rgba(31, 116, 227, 0.45);
 
 	/* Button */
 	--btn-primary: rgb(41, 158, 109);

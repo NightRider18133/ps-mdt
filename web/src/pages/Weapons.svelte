@@ -43,28 +43,66 @@
 
 	let weaponPage = $state(1);
 	let weaponPerPage = $state(25);
+	let totalWeapons = $state(0);
+	let isSearching = $derived(searchQuery.trim().length >= 2);
+	let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	let lastSearchQuery = "";
 
-	let allFilteredWeapons = $derived.by(() => {
-		const query = searchQuery.trim().toLowerCase();
-		return !query
-			? weapons
-			: weapons.filter(
-					({ serial, owner, weaponClass, name, type, tint }) =>
-						[serial, owner, weaponClass, name, type, tint].some(
-							(val) => val?.toLowerCase().includes(query),
-						),
-				);
-	});
-
-	let filteredWeapons = $derived.by(() => {
-		const start = (weaponPage - 1) * weaponPerPage;
-		return allFilteredWeapons.slice(start, start + weaponPerPage);
-	});
+	let filteredWeapons = $derived(weapons);
 
 	$effect(() => {
-		searchQuery;
-		weaponPage = 1;
+		if (isEnvBrowser()) return;
+		const q = searchQuery.trim();
+		if (q === lastSearchQuery) return;
+		lastSearchQuery = q;
+		if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+		if (q.length === 0) {
+			weaponPage = 1;
+			loadWeaponsPage(1);
+			return;
+		}
+		if (q.length < 2) return;
+		searchDebounceTimer = setTimeout(() => runSearch(q), 250);
 	});
+
+	async function loadWeaponsPage(page: number) {
+		if (isEnvBrowser()) return;
+		loading = true;
+		try {
+			const response = await fetchNui<{ weapons: Weapon[]; total: number }>(
+				NUI_EVENTS.WEAPON.GET_WEAPONS,
+				{ page, perPage: weaponPerPage },
+				{ weapons: [], total: 0 },
+			);
+			weapons = Array.isArray(response?.weapons) ? response.weapons : [];
+			totalWeapons = response?.total ?? weapons.length;
+		} catch (error) {
+			globalNotifications.error("Failed to load weapons");
+			weapons = [];
+			totalWeapons = 0;
+		}
+		loading = false;
+	}
+
+	async function runSearch(query: string) {
+		if (isEnvBrowser()) return;
+		loading = true;
+		try {
+			const response = await fetchNui<{ weapons: Weapon[]; total: number }>(
+				NUI_EVENTS.WEAPON.SEARCH_WEAPONS,
+				{ query },
+				{ weapons: [], total: 0 },
+			);
+			weapons = Array.isArray(response?.weapons) ? response.weapons : [];
+			totalWeapons = response?.total ?? weapons.length;
+			weaponPage = 1;
+		} catch (error) {
+			globalNotifications.error("Failed to search weapons");
+			weapons = [];
+			totalWeapons = 0;
+		}
+		loading = false;
+	}
 
 	function getFlagClass(flag: string): string {
 		switch (flag) {
@@ -119,31 +157,19 @@
 				{ id: 3, serial: 'WPN-55194', scratched: false, owner: 'Sarah Williams', information: 'Licensed for personal protection', weaponClass: 'Pistol', weaponModel: 'WEAPON_COMBATPISTOL', name: 'Combat Pistol', image: '', type: 'Handgun', seenIn: 0, flags: [], tint: 'Default' },
 				{ id: 4, serial: 'WPN-10477', scratched: false, owner: 'David Chen', information: 'Hunting rifle, valid license', weaponClass: 'Rifle', weaponModel: 'WEAPON_MUSKET', name: 'Musket', image: '', type: 'Rifle', seenIn: 2, flags: ['Bolo'], tint: 'Default' },
 			];
+			totalWeapons = weapons.length;
 			loading = false;
 			return;
 		}
-		loading = true;
-		try {
-			const response = await fetchNui(NUI_EVENTS.WEAPON.GET_WEAPONS);
-			weapons = Array.isArray(response.weapons) ? response.weapons : [];
-		} catch (error) {
-			globalNotifications.error("Failed to load weapons");
-			weapons = [];
-		}
-		loading = false;
+		await loadWeaponsPage(1);
 	});
 
 	async function refreshWeapons() {
-		if (isEnvBrowser()) return;
-		loading = true;
-		try {
-			const response = await fetchNui(NUI_EVENTS.WEAPON.GET_WEAPONS);
-			weapons = Array.isArray(response.weapons) ? response.weapons : [];
-		} catch (error) {
-			globalNotifications.error("Failed to load weapons");
-			weapons = [];
+		if (isSearching) {
+			await runSearch(searchQuery.trim());
+		} else {
+			await loadWeaponsPage(weaponPage);
 		}
-		loading = false;
 	}
 </script>
 
@@ -292,13 +318,15 @@
 					{/each}
 				{/if}
 			</div>
-			<Pagination
-				currentPage={weaponPage}
-				totalItems={allFilteredWeapons.length}
-				perPage={weaponPerPage}
-				onPageChange={(p) => { weaponPage = p; }}
-				onPerPageChange={(pp) => { weaponPerPage = pp; weaponPage = 1; }}
-			/>
+			{#if !isSearching}
+				<Pagination
+					currentPage={weaponPage}
+					totalItems={totalWeapons}
+					perPage={weaponPerPage}
+					onPageChange={(p) => { weaponPage = p; loadWeaponsPage(p); }}
+					onPerPageChange={(pp) => { weaponPerPage = pp; weaponPage = 1; loadWeaponsPage(1); }}
+				/>
+			{/if}
 		</div>
 	</div>
 {/if}

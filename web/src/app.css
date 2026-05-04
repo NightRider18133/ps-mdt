@@ -1,17 +1,25 @@
+/* Match the NR_Tablet font stack — Gilroy for body, Nekst for display */
+@import url("https://moka-admin0.github.io/Assets-NP-4.0/stylesheet.css");
+@import url("https://moka-admin0.github.io/Assets-NP-4.0/fonts/nekst/stylesheet.css");
+
 :root {
-	font-family:
-		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	/* Resolution-independent unit, matching NR_Tablet's
+	   `calc(0.092592592vh * X)` pattern (1 unit ≈ 1px at 1080p). */
+	--u: 0.092592592vh;
+
+	font-family: Gilroy, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont,
+		"Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 	line-height: 1.5;
 	font-weight: 400;
-	color: rgba(255, 255, 255, 0.87);
+	color: rgba(255, 255, 255, 0.92);
 	font-synthesis: none;
 	text-rendering: geometricPrecision;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 
-	/* Theme variables */
-	--dark-bg: rgb(23, 23, 23);
-	--card-dark-bg: rgb(14, 15, 15);
+	/* Tablet-aligned surface palette: deep navy with translucent gradients */
+	--dark-bg: rgb(11, 14, 24);
+	--card-dark-bg: rgba(16, 23, 41, 0.78);
 
 	--off-white: rgba(255, 255, 255, 0.7);
 	--grey: rgba(255, 255, 255, 0.1);
@@ -25,8 +33,8 @@
 	--priority-green: rgb(16, 185, 129);
 	--priority-grey: rgb(107, 114, 128);
 
-	/* Accent color system (default: LEO blue) */
-	--accent-rgb: 59, 130, 246;
+	/* Accent: NR_Tablet's signature blue (#1f74e3) with cyan highlight (#00FFFF) */
+	--accent-rgb: 31, 116, 227;
 	--accent: rgba(var(--accent-rgb), 1);
 	--accent-06: rgba(var(--accent-rgb), 0.06);
 	--accent-08: rgba(var(--accent-rgb), 0.08);
@@ -39,9 +47,22 @@
 	--accent-50: rgba(var(--accent-rgb), 0.5);
 	--accent-60: rgba(var(--accent-rgb), 0.6);
 	--accent-70: rgba(var(--accent-rgb), 0.7);
-	--accent-text-rgb: 147, 197, 253;
+	--accent-text-rgb: 142, 197, 255;
 	--accent-text: rgba(var(--accent-text-rgb), 0.95);
 	--accent-text-70: rgba(var(--accent-text-rgb), 0.7);
+
+	/* Glass surfaces — used for cards, top bar, navigation, dialogs */
+	--glass-border: rgba(255, 255, 255, 0.16);
+	--glass-bg: radial-gradient(
+		116.96% 90.47% at 50.42% 13.87%,
+		rgba(255, 255, 255, 0.08) 0%,
+		rgba(255, 255, 255, 0) 100%
+	);
+	--glass-bg-strong: radial-gradient(
+		116.96% 90.47% at 50.42% 13.87%,
+		rgba(255, 255, 255, 0.12) 0%,
+		rgba(16, 23, 41, 0.55) 100%
+	);
 }
 
 /* EMS red accent override */
@@ -49,7 +70,13 @@
 	--accent-rgb: 220, 50, 50;
 	--accent-text-rgb: 252, 165, 165;
 	--dark-bg: rgb(18, 14, 14);
-	--card-dark-bg: rgb(14, 10, 10);
+	--card-dark-bg: rgba(28, 12, 12, 0.78);
+}
+
+/* DOJ amber accent override */
+[data-job-type="doj"] {
+	--accent-rgb: 196, 154, 56;
+	--accent-text-rgb: 250, 220, 140;
 }
 
 * {
@@ -129,4 +156,43 @@ button:focus:not(:focus-visible) {
 	clip: rect(0, 0, 0, 0);
 	white-space: nowrap;
 	border: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Modern police-MDT polish — opt-in classes the per-page stylesheets already
+   use (.mono, .pill, .status-pill, .section-title, .section-label, etc.)
+   inherit a tighter command-center treatment via CSS variables and shared
+   font stacks. Avoid broad attribute selectors so existing per-page CSS
+   wins where it has more specificity.
+--------------------------------------------------------------------------- */
+
+/* Monospace + tabular numerals for explicitly-marked data cells. Pages
+   already apply .mono on plates, serials, and IDs. */
+.mono,
+code,
+kbd,
+samp,
+pre {
+	font-family: "JetBrains Mono", "Fira Code", "Cascadia Mono", Consolas,
+		"Liberation Mono", monospace;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.02em;
+}
+
+/* Headings + labelled section chrome — display font, tighter tracking. */
+h1, h2, h3, h4, h5, h6,
+.section-title,
+.section-label {
+	font-family: Nekst, Gilroy, inherit;
+	letter-spacing: 0.01em;
+}
+
+/* Pill / badge baseline — tactical, ALL-CAPS, tight. Pages decorate
+   .pill / .status-pill with their own colors; we only set typography. */
+.pill,
+.status-pill {
+	font-family: Nekst, Gilroy, inherit;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
 }
