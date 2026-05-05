@@ -996,6 +996,10 @@
 
 	/* ===== Dispatch Items — sub-card style ===== */
 	.dispatch-item {
+		display: flex;
+		flex-direction: column;
+		width: 100%;
+		flex-shrink: 0;
 		border-radius: 10px;
 		overflow: hidden;
 		transition: all 0.15s ease;
